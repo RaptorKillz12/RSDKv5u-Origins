@@ -1,4 +1,4 @@
-name: Build RSDKv5 + U
+name: Build RSDKv5
 
 on:
   workflow_dispatch:
@@ -6,8 +6,9 @@ on:
 jobs:
 
   # ============================================================
-  # WINDOWS 32-BIT
+  # RSDKv5 / RSDKv5U - Windows 32-bit
   # ============================================================
+
   v5-windows:
     runs-on: windows-2022
 
@@ -31,23 +32,27 @@ jobs:
             make
             git
             mingw-w64-i686-gcc
-            mingw-w64-i686-SDL2
             mingw-w64-i686-libogg
             mingw-w64-i686-libtheora
 
-      - name: Build RSDKv5
+      - name: Build RSDKv5 + RSDKv5U
         run: |
+          set -e
+
           make -j8 RSDK_ONLY=1 AUTOBUILD=1
 
-      - name: Build RSDKv5U
-        run: |
           make -j8 clean-rsdk
+
           make -j8 RSDK_ONLY=1 RSDK_REVISION=3 AUTOBUILD=1
 
       - name: Move artifacts
         run: |
           mkdir -p artifacts
-          cp ./bin/Windows/DX9/*.exe ./artifacts/
+
+          find ./bin/Windows/DX9 -name "*.exe" -type f -exec cp {} ./artifacts/ \;
+
+          echo "Windows 32-bit artifacts:"
+          ls -lh artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -57,8 +62,9 @@ jobs:
 
 
   # ============================================================
-  # WINDOWS 64-BIT
+  # RSDKv5 / RSDKv5U - Windows 64-bit
   # ============================================================
+
   v5-windows-x64:
     runs-on: windows-2022
 
@@ -86,19 +92,24 @@ jobs:
             mingw-w64-x86_64-libogg
             mingw-w64-x86_64-libtheora
 
-      - name: Build RSDKv5
+      - name: Build RSDKv5 + RSDKv5U
         run: |
+          set -e
+
           make -j8 RSDK_ONLY=1 AUTOBUILD=1
 
-      - name: Build RSDKv5U
-        run: |
           make -j8 clean-rsdk
+
           make -j8 RSDK_ONLY=1 RSDK_REVISION=3 AUTOBUILD=1
 
       - name: Move artifacts
         run: |
           mkdir -p artifacts
-          cp ./bin/Windows/DX9/*.exe ./artifacts/
+
+          find ./bin/Windows/DX9 -name "*.exe" -type f -exec cp {} ./artifacts/ \;
+
+          echo "Windows 64-bit artifacts:"
+          ls -lh artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -108,8 +119,9 @@ jobs:
 
 
   # ============================================================
-  # LINUX
+  # RSDKv5 / RSDKv5U - Linux
   # ============================================================
+
   v5-linux:
     runs-on: ubuntu-latest
 
@@ -122,6 +134,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             build-essential \
             pkg-config \
@@ -132,168 +145,349 @@ jobs:
             libglew-dev \
             libglfw3-dev
 
-      # --------------------------------------------------------
-      # OpenGL RSDKv5
-      # --------------------------------------------------------
-      - name: Build RSDKv5 OpenGL
+      - name: Build RSDKv5 + RSDKv5U OpenGL
         run: |
-          make -j$(nproc) RSDK_ONLY=1 AUTOBUILD=1
+          set -e
 
-      - name: Build RSDKv5U OpenGL
+          make -j8 RSDK_ONLY=1 AUTOBUILD=1
+
+          make -j8 clean-rsdk
+
+          make -j8 RSDK_ONLY=1 RSDK_REVISION=3 AUTOBUILD=1
+
+      - name: Build RSDKv5 + RSDKv5U SDL2
         run: |
-          make -j$(nproc) clean-rsdk
-          make -j$(nproc) RSDK_ONLY=1 RSDK_REVISION=3 AUTOBUILD=1
+          set -e
 
-      # --------------------------------------------------------
-      # SDL2 RSDKv5
-      # --------------------------------------------------------
-      - name: Build RSDKv5 SDL2
+          make -j8 RSDK_ONLY=1 SUBSYSTEM=SDL2 AUTOBUILD=1
+
+          make -j8 clean-rsdk
+
+          make -j8 RSDK_ONLY=1 SUBSYSTEM=SDL2 RSDK_REVISION=3 AUTOBUILD=1
+
+      - name: Show Linux artifacts
         run: |
-          make -j$(nproc) RSDK_ONLY=1 SUBSYSTEM=SDL2 AUTOBUILD=1
-
-      - name: Build RSDKv5U SDL2
-        run: |
-          make -j$(nproc) clean-rsdk
-          make -j$(nproc) RSDK_ONLY=1 SUBSYSTEM=SDL2 RSDK_REVISION=3 AUTOBUILD=1
-
-      # Preserve Linux executable permissions.
-      - name: Package Linux artifacts
-        run: |
-          mkdir -p artifacts
-
-          find bin/Linux -type f -executable -exec cp {} artifacts/ \;
-
-          tar -czvf rsdkv5-linux.tar.gz -C artifacts .
+          echo "Linux artifacts:"
+          find bin/Linux -type f -maxdepth 3 -print || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: v5-linux
-          path: rsdkv5-linux.tar.gz
+          path: bin/Linux
 
 
   # ============================================================
-  # ANDROID
+  # Android
+  #
+  # Builds:
+  #   RSDKv5U = RETRO_REVISION=3
+  #   RSDKv5  = RETRO_REVISION=2
+  #
+  # ABIs:
+  #   armeabi-v7a
+  #   arm64-v8a
   # ============================================================
+
   v5-android:
     runs-on: ubuntu-latest
 
     steps:
-      # --------------------------------------------------------
-      # RSDKv5 repository
-      # --------------------------------------------------------
+
+      # ----------------------------------------------------------
+      # RSDKv5 source
+      # ----------------------------------------------------------
+
       - name: Checkout RSDKv5
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # --------------------------------------------------------
-      # Sonic Mania Decompilation
-      # --------------------------------------------------------
+
+      # ----------------------------------------------------------
+      # Sonic Mania Android game source
+      # ----------------------------------------------------------
+
       - name: Checkout Sonic Mania
         uses: actions/checkout@v4
         with:
           repository: RSDKModding/Sonic-Mania-Decompilation
           path: Sonic-Mania-Decompilation
+          submodules: recursive
 
-      # --------------------------------------------------------
-      # Example Mods
-      # --------------------------------------------------------
-      - name: Checkout Example Mods
-        uses: actions/checkout@v4
-        with:
-          repository: RSDKModding/RSDKv5-Example-Mods
-          path: RSDKv5-Example-Mods
 
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
       # GameAPI
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+
       - name: Checkout GameAPI
         uses: actions/checkout@v4
         with:
           repository: RSDKModding/RSDKv5-GameAPI
           path: RSDKv5-GameAPI
 
-      # --------------------------------------------------------
-      # Android dependencies
-      # --------------------------------------------------------
-      - name: Setup RSDKv5 Android dependencies
+
+      # ----------------------------------------------------------
+      # Example Android mods
+      # ----------------------------------------------------------
+
+      - name: Checkout Example Mods
+        uses: actions/checkout@v4
+        with:
+          repository: RSDKModding/RSDKv5-Example-Mods
+          path: RSDKv5-Example-Mods
+
+
+      # ----------------------------------------------------------
+      # Android audio dependencies
+      # ----------------------------------------------------------
+
+      - name: Setup Android dependencies
         working-directory: ./dependencies/android
         run: |
-          curl -L -O https://downloads.xiph.org/releases/ogg/libogg-1.3.5.zip
-          curl -L -O https://downloads.xiph.org/releases/theora/libtheora-1.1.1.zip
+          set -e
 
-          unzip '*.zip'
+          echo "Downloading libogg..."
 
-          rm -f *.zip
+          curl -L \
+            -o libogg.zip \
+            https://downloads.xiph.org/releases/ogg/libogg-1.3.5.zip
 
-          rsync -ar libogg-*/* libogg/
-          mv libtheora-* libtheora
+          echo "Downloading libtheora..."
 
-      # --------------------------------------------------------
-      # Android symlinks
-      # --------------------------------------------------------
-      - name: Setup Android RSDKv5 symlinks
+          curl -L \
+            -o libtheora.zip \
+            https://downloads.xiph.org/releases/theora/libtheora-1.1.1.zip
+
+          echo "Extracting libogg..."
+
+          unzip -q libogg.zip
+
+          echo "Extracting libtheora..."
+
+          unzip -q libtheora.zip
+
+          rm -f libogg.zip
+          rm -f libtheora.zip
+
+          rm -rf libogg
+          mkdir -p libogg
+
+          rsync -a \
+            libogg-1.3.5/ \
+            libogg/
+
+          rm -rf libtheora
+
+          mv \
+            libtheora-1.1.1 \
+            libtheora
+
+          echo "Android dependencies:"
+          ls -la
+
+
+      # ----------------------------------------------------------
+      # Connect RSDKv5 to the Android project
+      # ----------------------------------------------------------
+
+      - name: Setup Android source tree
         run: |
-          rm -rf Game
+          set -e
 
-          rm -rf Sonic-Mania-Decompilation/dependencies/RSDKv5
+          echo "Setting up RSDKv5 dependency..."
 
-          ln -s "$PWD" \
+          rm -rf \
             Sonic-Mania-Decompilation/dependencies/RSDKv5
 
-          ln -s "$PWD/RSDKv5-GameAPI" \
+          ln -s \
+            "$GITHUB_WORKSPACE" \
+            Sonic-Mania-Decompilation/dependencies/RSDKv5
+
+
+          echo "Setting up GameAPI mods..."
+
+          rm -f \
             RSDKv5-Example-Mods/ManiaTouchControls/GameAPI
 
-          ln -s "$PWD/RSDKv5-GameAPI" \
+          rm -f \
             RSDKv5-Example-Mods/UltrawideMania/GameAPI
 
-          ln -s "$PWD/Sonic-Mania-Decompilation" \
+
+          ln -s \
+            "$GITHUB_WORKSPACE/RSDKv5-GameAPI" \
+            RSDKv5-Example-Mods/ManiaTouchControls/GameAPI
+
+          ln -s \
+            "$GITHUB_WORKSPACE/RSDKv5-GameAPI" \
+            RSDKv5-Example-Mods/UltrawideMania/GameAPI
+
+
+          echo "Setting up Android Game source..."
+
+          rm -f \
             android/app/jni/Game
 
-          ln -s "$PWD/RSDKv5-Example-Mods/ManiaTouchControls" \
+          ln -s \
+            "$GITHUB_WORKSPACE/Sonic-Mania-Decompilation" \
+            android/app/jni/Game
+
+
+          echo "Setting up ManiaTouchControls..."
+
+          rm -f \
             android/app/jni/MTC
 
-          ln -s "$PWD/RSDKv5-Example-Mods/UltrawideMania" \
+          ln -s \
+            "$GITHUB_WORKSPACE/RSDKv5-Example-Mods/ManiaTouchControls" \
+            android/app/jni/MTC
+
+
+          echo "Setting up UltrawideMania..."
+
+          rm -f \
             android/app/jni/UWM
 
-      # --------------------------------------------------------
+          ln -s \
+            "$GITHUB_WORKSPACE/RSDKv5-Example-Mods/UltrawideMania" \
+            android/app/jni/UWM
+
+
+          echo ""
+          echo "Android source tree:"
+          ls -la android/app/jni/
+
+
+      # ----------------------------------------------------------
       # Java
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+
       - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: temurin
 
-      # --------------------------------------------------------
+
+      # ----------------------------------------------------------
       # Android SDK
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # --------------------------------------------------------
-      # Build RSDKv5U Android
-      # --------------------------------------------------------
+
+      # ----------------------------------------------------------
+      # FIX FOR EXIT CODE 126
+      #
+      # GitHub checkout can leave gradlew without executable
+      # permissions. chmod fixes:
+      #
+      #   ./gradlew: Permission denied
+      #   exit code 126
+      # ----------------------------------------------------------
+
+      - name: Fix Gradle wrapper permissions
+        working-directory: ./android
+        run: |
+          set -e
+
+          echo "Before chmod:"
+          ls -l gradlew
+
+          chmod +x gradlew
+
+          echo "After chmod:"
+          ls -l gradlew
+
+          echo "Gradle wrapper:"
+          file gradlew
+
+
+      # ----------------------------------------------------------
+      # Test Gradle before compiling
+      # ----------------------------------------------------------
+
+      - name: Test Gradle wrapper
+        working-directory: ./android
+        run: |
+          set -e
+
+          ./gradlew --version
+
+
+      # ----------------------------------------------------------
+      # Build RSDKv5U
+      #
+      # RETRO_REVISION=3 = RSDKv5U
+      # ----------------------------------------------------------
+
       - name: Build RSDKv5U Android
         working-directory: ./android
         run: |
+          set -e
+
+          echo "========================================"
+          echo "Building RSDKv5U Android"
+          echo "========================================"
+
           ./gradlew assemble \
             --no-daemon \
             -PABIFILTERS="armeabi-v7a;arm64-v8a" \
             -PRETRO_DISABLE_PLUS \
             -PRETRO_REVISION=3
 
-          mv app/build/outputs/apk/release/*.apk \
-            rsdkv5u_mania.apk
+          mkdir -p ../android-artifacts
 
-      # --------------------------------------------------------
-      # Build RSDKv5 Android
-      # --------------------------------------------------------
+          echo "Searching for APK..."
+
+          APK=$(find \
+            app/build/outputs/apk/release \
+            -name "*.apk" \
+            -type f \
+            | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: RSDKv5U APK was not produced."
+
+            echo "Build output:"
+            find app/build/outputs \
+              -type f \
+              -print \
+              || true
+
+            exit 1
+          fi
+
+          echo "Found:"
+          echo "$APK"
+
+          cp \
+            "$APK" \
+            ../android-artifacts/rsdkv5u_mania.apk
+
+
+      # ----------------------------------------------------------
+      # Build RSDKv5
+      #
+      # RETRO_REVISION=2 = RSDKv5
+      # ----------------------------------------------------------
+
       - name: Build RSDKv5 Android
         working-directory: ./android
         run: |
-          ./gradlew clean --no-daemon
+          set -e
+
+          echo "========================================"
+          echo "Cleaning Android build"
+          echo "========================================"
+
+          ./gradlew clean \
+            --no-daemon
+
+          echo "========================================"
+          echo "Building RSDKv5 Android"
+          echo "========================================"
 
           ./gradlew assemble \
             --no-daemon \
@@ -301,68 +495,91 @@ jobs:
             -PRETRO_DISABLE_PLUS \
             -PRETRO_REVISION=2
 
-          mv app/build/outputs/apk/release/*.apk \
-            rsdkv5_mania.apk
+          echo "Searching for APK..."
 
-      # --------------------------------------------------------
-      # Bundle Android artifacts
-      # --------------------------------------------------------
-      - name: Bundle Android artifacts
-        run: |
-          mkdir -p artifacts/mods
+          APK=$(find \
+            app/build/outputs/apk/release \
+            -name "*.apk" \
+            -type f \
+            | head -n 1)
 
-          cp android/*.apk artifacts/
+          if [ -z "$APK" ]; then
+            echo "ERROR: RSDKv5 APK was not produced."
 
-          # Mania Touch Controls
-          if [ -d android/app/jni/MTC/build ]; then
-            mkdir -p artifacts/mods/MTC
-            cp -r android/app/jni/MTC/build/* artifacts/mods/MTC/
+            echo "Build output:"
+            find app/build/outputs \
+              -type f \
+              -print \
+              || true
+
+            exit 1
           fi
 
-          # Ultrawide Mania
-          if [ -d android/app/jni/UWM/build ]; then
-            mkdir -p artifacts/mods/UWM
-            cp -r android/app/jni/UWM/build/* artifacts/mods/UWM/
-          fi
+          echo "Found:"
+          echo "$APK"
 
-          # OpenGL shaders
-          mkdir -p artifacts/mods/GLShaders/Data/Shaders
+          cp \
+            "$APK" \
+            ../android-artifacts/rsdkv5_mania.apk
 
-          if [ -d RSDKv5/Shaders/OGL ]; then
-            cp -r RSDKv5/Shaders/OGL/* \
-              artifacts/mods/GLShaders/Data/Shaders/
-          fi
 
-          # GLShaders mod.ini
-          printf '%s\n' \
-            'Name=GLShaders' \
-            'Description=OGLShaders' \
-            'Author=Ducky' \
-            'Version=1.0.0' \
-            'TargetVersion=-1' \
-            > artifacts/mods/GLShaders/mod.ini
+      # ----------------------------------------------------------
+      # Show APKs
+      # ----------------------------------------------------------
 
-          # Mod configuration
-          printf '%s\n' \
-            '[Mods]' \
-            'MTC=y' \
-            'UWM=y' \
-            'GLShaders=y' \
-            > artifacts/mods/modconfig.ini
-
-      # --------------------------------------------------------
-      # Remove symlink before checkout cleanup
-      # --------------------------------------------------------
-      - name: Cleanup
+      - name: Show Android APKs
         if: always()
         run: |
-          rm -f Sonic-Mania-Decompilation/dependencies/RSDKv5
+          echo "========================================"
+          echo "ANDROID APK OUTPUT"
+          echo "========================================"
 
-      # --------------------------------------------------------
-      # Upload Android
-      # --------------------------------------------------------
+          if [ -d android-artifacts ]; then
+            ls -lh android-artifacts/
+
+            echo ""
+            echo "File information:"
+
+            file \
+              android-artifacts/*.apk \
+              || true
+          else
+            echo "android-artifacts directory does not exist."
+          fi
+
+
+      # ----------------------------------------------------------
+      # Cleanup symlinks
+      # ----------------------------------------------------------
+
+      - name: Cleanup Android source tree
+        if: always()
+        run: |
+          rm -f \
+            Sonic-Mania-Decompilation/dependencies/RSDKv5 \
+            || true
+
+          rm -f \
+            android/app/jni/Game \
+            || true
+
+          rm -f \
+            android/app/jni/MTC \
+            || true
+
+          rm -f \
+            android/app/jni/UWM \
+            || true
+
+
+      # ----------------------------------------------------------
+      # Upload Android APKs
+      # ----------------------------------------------------------
+
       - name: Upload Android artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: v5-android
-          path: artifacts
+          path: android-artifacts
+          if-no-files-found: warn

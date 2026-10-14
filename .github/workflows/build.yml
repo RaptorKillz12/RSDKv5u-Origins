@@ -1,726 +1,148 @@
-name: Build RSDKv5
+
+name: Build Origins-Compatible Android Engine
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-
-  # ============================================================
-  # WINDOWS 32-BIT
-  # ============================================================
-
-  v5-windows:
-    runs-on: windows-2022
-
-    defaults:
-      run:
-        shell: msys2 {0}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW32
-          update: true
-          install: >-
-            pkg-config
-            make
-            git
-            mingw-w64-i686-gcc
-            mingw-w64-i686-libogg
-            mingw-w64-i686-libtheora
-
-      - name: Build RSDKv5
-        run: |
-          set -e
-          make -j8 RSDK_ONLY=1 AUTOBUILD=1
-
-      - name: Build RSDKv5U
-        run: |
-          set -e
-          make -j8 clean-rsdk
-          make -j8 RSDK_ONLY=1 RSDK_REVISION=3 AUTOBUILD=1
-
-      - name: Collect artifacts
-        run: |
-          mkdir -p artifacts
-
-          find ./bin/Windows/DX9 \
-            -type f \
-            -name "*.exe" \
-            -exec cp {} ./artifacts/ \;
-
-          ls -lh artifacts
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: v5-windows
-          path: artifacts
-
-
-  # ============================================================
-  # WINDOWS 64-BIT
-  # ============================================================
-
-  v5-windows-x64:
-    runs-on: windows-2022
-
-    defaults:
-      run:
-        shell: msys2 {0}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            pkg-config
-            make
-            git
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-SDL2
-            mingw-w64-x86_64-libogg
-            mingw-w64-x86_64-libtheora
-
-      - name: Build RSDKv5
-        run: |
-          set -e
-          make -j8 RSDK_ONLY=1 AUTOBUILD=1
-
-      - name: Build RSDKv5U
-        run: |
-          set -e
-          make -j8 clean-rsdk
-          make -j8 RSDK_ONLY=1 RSDK_REVISION=3 AUTOBUILD=1
-
-      - name: Collect artifacts
-        run: |
-          mkdir -p artifacts
-
-          find ./bin/Windows/DX9 \
-            -type f \
-            -name "*.exe" \
-            -exec cp {} ./artifacts/ \;
-
-          ls -lh artifacts
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: v5-windows-x64
-          path: artifacts
-
-
-  # ============================================================
-  # LINUX
-  # ============================================================
-
-  v5-linux:
+  android:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Origins-compatible RSDK engine
         uses: actions/checkout@v5
         with:
+          repository: thesupersonic16/RSDKv5u-Origins
+          ref: master
           submodules: recursive
+          path: engine
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            git \
-            libogg-dev \
-            libsdl2-dev \
-            libtheora-dev \
-            libglew-dev \
-            libglfw3-dev
-
-      - name: Build RSDKv5 OpenGL
-        run: |
-          set -e
-          make -j8 RSDK_ONLY=1 AUTOBUILD=1
-
-      - name: Build RSDKv5U OpenGL
-        run: |
-          set -e
-          make -j8 clean-rsdk
-          make -j8 \
-            RSDK_ONLY=1 \
-            RSDK_REVISION=3 \
-            AUTOBUILD=1
-
-      - name: Build RSDKv5 SDL2
-        run: |
-          set -e
-          make -j8 \
-            RSDK_ONLY=1 \
-            SUBSYSTEM=SDL2 \
-            AUTOBUILD=1
-
-      - name: Build RSDKv5U SDL2
-        run: |
-          set -e
-          make -j8 clean-rsdk
-          make -j8 \
-            RSDK_ONLY=1 \
-            SUBSYSTEM=SDL2 \
-            RSDK_REVISION=3 \
-            AUTOBUILD=1
-
-      - name: Show Linux artifacts
-        if: always()
-        run: |
-          find bin/Linux \
-            -type f \
-            -print \
-            || true
-
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: v5-linux
-          path: bin/Linux
-          if-no-files-found: warn
-
-
-  # ============================================================
-  # ANDROID
-  # ============================================================
-
-  v5-android:
-    runs-on: ubuntu-latest
-
-    steps:
-
-      # ----------------------------------------------------------
-      # RSDKv5
-      # ----------------------------------------------------------
-
-      - name: Checkout RSDKv5
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-
-      # ----------------------------------------------------------
-      # SONIC MANIA
-      # ----------------------------------------------------------
-
-      - name: Checkout Sonic Mania
+      - name: Checkout Sonic Mania game source
         uses: actions/checkout@v5
         with:
           repository: RSDKModding/Sonic-Mania-Decompilation
-          path: Sonic-Mania-Decompilation
           submodules: recursive
+          path: Sonic-Mania-Decompilation
 
-
-      # ----------------------------------------------------------
-      # GAMEAPI
-      # ----------------------------------------------------------
-
-      - name: Checkout GameAPI
-        uses: actions/checkout@v5
-        with:
-          repository: RSDKModding/RSDKv5-GameAPI
-          path: RSDKv5-GameAPI
-
-
-      # ----------------------------------------------------------
-      # EXAMPLE MODS
-      # ----------------------------------------------------------
-
-      - name: Checkout Example Mods
-        uses: actions/checkout@v5
-        with:
-          repository: RSDKModding/RSDKv5-Example-Mods
-          path: RSDKv5-Example-Mods
-
-
-      # ----------------------------------------------------------
-      # VERIFY ANDROID PROJECT
-      # ----------------------------------------------------------
-
-      - name: Verify Android project
-        run: |
-          set -e
-
-          echo "========================================"
-          echo "ANDROID PROJECT"
-          echo "========================================"
-
-          if [ ! -d android ]; then
-            echo "ERROR: android directory does not exist."
-            exit 1
-          fi
-
-          if [ ! -f android/gradlew ]; then
-            echo "ERROR: android/gradlew does not exist."
-            exit 1
-          fi
-
-          ls -la android
-
-          echo ""
-          echo "Gradle wrapper:"
-          ls -l android/gradlew
-
-
-      # ----------------------------------------------------------
-      # ANDROID DEPENDENCIES
-      # ----------------------------------------------------------
-
-      - name: Setup Android dependencies
-        working-directory: ./dependencies/android
-        run: |
-          set -e
-
-          echo "========================================"
-          echo "ANDROID DEPENDENCIES"
-          echo "========================================"
-
-          curl -fL \
-            -o libogg.zip \
-            https://downloads.xiph.org/releases/ogg/libogg-1.3.5.zip
-
-          curl -fL \
-            -o libtheora.zip \
-            https://downloads.xiph.org/releases/theora/libtheora-1.1.1.zip
-
-          unzip -q libogg.zip
-          unzip -q libtheora.zip
-
-          rm -f libogg.zip
-          rm -f libtheora.zip
-
-          rm -rf libogg
-          mkdir -p libogg
-
-          rsync -a \
-            libogg-1.3.5/ \
-            libogg/
-
-          rm -rf libtheora
-
-          mv \
-            libtheora-1.1.1 \
-            libtheora
-
-          echo "Dependencies ready."
-
-
-      # ----------------------------------------------------------
-      # ANDROID SOURCE TREE
-      # ----------------------------------------------------------
-
-      - name: Setup Android source tree
-        run: |
-          set -e
-
-          rm -rf \
-            Sonic-Mania-Decompilation/dependencies/RSDKv5
-
-          ln -s \
-            "$GITHUB_WORKSPACE" \
-            Sonic-Mania-Decompilation/dependencies/RSDKv5
-
-          rm -rf \
-            RSDKv5-Example-Mods/ManiaTouchControls/GameAPI
-
-          rm -rf \
-            RSDKv5-Example-Mods/UltrawideMania/GameAPI
-
-          ln -s \
-            "$GITHUB_WORKSPACE/RSDKv5-GameAPI" \
-            RSDKv5-Example-Mods/ManiaTouchControls/GameAPI
-
-          ln -s \
-            "$GITHUB_WORKSPACE/RSDKv5-GameAPI" \
-            RSDKv5-Example-Mods/UltrawideMania/GameAPI
-
-          rm -rf \
-            android/app/jni/Game
-
-          ln -s \
-            "$GITHUB_WORKSPACE/Sonic-Mania-Decompilation" \
-            android/app/jni/Game
-
-          rm -rf \
-            android/app/jni/MTC
-
-          ln -s \
-            "$GITHUB_WORKSPACE/RSDKv5-Example-Mods/ManiaTouchControls" \
-            android/app/jni/MTC
-
-          rm -rf \
-            android/app/jni/UWM
-
-          ln -s \
-            "$GITHUB_WORKSPACE/RSDKv5-Example-Mods/UltrawideMania" \
-            android/app/jni/UWM
-
-          echo ""
-          echo "Android JNI tree:"
-          ls -la android/app/jni
-
-
-      # ==========================================================
-      # INSTALL JAVA 17
-      # ==========================================================
-
-      - name: Setup JDK 17
+      - name: Setup Java 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-          java-package: jdk
-          check-latest: true
-
-
-      # ==========================================================
-      # FORCE JAVA 17
-      # ==========================================================
-
-      - name: Force Java 17
-        shell: bash
-        run: |
-          set -e
-
-          echo "JAVA_HOME_17_X64:"
-          echo "$JAVA_HOME_17_X64"
-
-          if [ -z "$JAVA_HOME_17_X64" ]; then
-            echo "ERROR: Java 17 was not installed."
-            exit 1
-          fi
-
-          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
-          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
-
-          export JAVA_HOME="$JAVA_HOME_17_X64"
-
-          echo ""
-          echo "Using Java:"
-          "$JAVA_HOME/bin/java" -version
-
-
-      # ==========================================================
-      # ANDROID SDK
-      # ==========================================================
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-
-      # ==========================================================
-      # GRADLE PERMISSIONS
-      # ==========================================================
-
-      - name: Fix Gradle permissions
-        working-directory: ./android
+      - name: Install Linux tools
         run: |
-          set -e
+          sudo apt-get update
+          sudo apt-get install -y curl unzip rsync
 
-          chmod +x gradlew
-
-          ls -l gradlew
-
-
-      # ==========================================================
-      # ABSOLUTELY FORCE GRADLE TO JAVA 17
-      #
-      # org.gradle.java.home is stronger than relying on PATH.
-      # ==========================================================
-
-      - name: Configure Gradle Java 17
-        working-directory: ./android
+      - name: Download Android OGG and Theora dependencies
+        working-directory: engine/dependencies/android
         run: |
-          set -e
+          set -euo pipefail
 
-          echo "org.gradle.java.home=$JAVA_HOME_17_X64" \
-            > gradle.properties
+          curl -fL \
+            https://downloads.xiph.org/releases/ogg/libogg-1.3.5.zip \
+            -o libogg.zip
 
-          echo ""
-          echo "gradle.properties:"
-          cat gradle.properties
+          curl -fL \
+            https://downloads.xiph.org/releases/theora/libtheora-1.1.1.zip \
+            -o libtheora.zip
 
+          unzip -q libogg.zip
+          unzip -q libtheora.zip
 
-      # ==========================================================
-      # VERIFY JAVA
-      # ==========================================================
+          rm -rf libogg libtheora
+          mkdir libogg
+          rsync -a libogg-1.3.5/ libogg/
+          mv libtheora-1.1.1 libtheora
 
-      - name: Verify Java
+      - name: Configure Android source links
         run: |
-          set -e
+          set -euo pipefail
 
-          echo "========================================"
-          echo "JAVA"
-          echo "========================================"
-
-          echo "JAVA_HOME:"
-          echo "$JAVA_HOME"
-
-          echo ""
-
-          which java
-
-          echo ""
-
-          java -version
-
-          echo ""
-
-          javac -version
-
-
-      # ==========================================================
-      # CLEAR OLD GRADLE CACHE
-      # ==========================================================
-
-      - name: Clear Gradle caches
-        run: |
-          set -e
-
-          echo "Clearing old Gradle caches..."
+          mkdir -p engine/android/app/jni
 
           rm -rf \
-            "$HOME/.gradle/caches/7.5.1"
+            engine/android/app/jni/RSDKv5 \
+            engine/android/app/jni/Game
 
-          rm -rf \
-            "$HOME/.gradle/caches/7.5"
+          ln -s \
+            "$GITHUB_WORKSPACE/engine" \
+            engine/android/app/jni/RSDKv5
 
-          echo "Gradle caches cleared."
+          ln -s \
+            "$GITHUB_WORKSPACE/Sonic-Mania-Decompilation" \
+            engine/android/app/jni/Game
 
+          echo "JNI source links:"
+          ls -la engine/android/app/jni
 
-      # ==========================================================
-      # TEST GRADLE
-      # ==========================================================
-
-      - name: Test Gradle
-        working-directory: ./android
+      - name: Verify Android project
         run: |
-          set -e
+          set -euo pipefail
 
-          echo "========================================"
-          echo "GRADLE VERSION"
-          echo "========================================"
+          test -f engine/android/gradlew
+          test -f engine/android/app/build.gradle
+          test -f engine/android/app/jni/CMakeLists.txt
 
-          ./gradlew \
-            --no-daemon \
-            --version
-
-
-      # ==========================================================
-      # CREATE APK DIRECTORY
-      # ==========================================================
-
-      - name: Create Android artifact directory
-        run: |
-          set -e
-
-          mkdir -p android-artifacts
-
-          ls -ld android-artifacts
-
-
-      # ==========================================================
-      # BUILD RSDKv5U
-      # ==========================================================
+          chmod +x engine/android/gradlew
 
       - name: Build RSDKv5U Android
-        working-directory: ./android
+        working-directory: engine/android
         run: |
-          set -e
-
-          echo "========================================"
-          echo "BUILDING RSDKv5U ANDROID"
-          echo "========================================"
-
-          echo "Java:"
-          java -version
-
-          echo ""
-          echo "Gradle:"
-          ./gradlew --version
-
-          echo ""
-          echo "Revision: 3"
-          echo "ABIs: armeabi-v7a + arm64-v8a"
+          set -euo pipefail
 
           ./gradlew assemble \
             --no-daemon \
             --stacktrace \
-            -PABIFILTERS="armeabi-v7a;arm64-v8a" \
+            -PABIFILTERS="arm64-v8a;armeabi-v7a" \
             -PRETRO_DISABLE_PLUS \
             -PRETRO_REVISION=3
 
-          echo ""
-          echo "========================================"
-          echo "RSDKv5U APK SEARCH"
-          echo "========================================"
+      - name: Save RSDKv5U APKs
+        if: always()
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/v5u"
 
-          find app/build/outputs \
-            -type f \
-            -name "*.apk" \
-            -print \
-            || true
-
-          APK=$(find \
-            app/build/outputs \
-            -type f \
-            -name "*.apk" \
-            | head -n 1)
-
-          if [ -z "$APK" ]; then
-            echo "ERROR: RSDKv5U APK was not produced."
-            exit 1
-          fi
-
-          echo "Found:"
-          echo "$APK"
-
-          cp \
-            "$APK" \
-            ../android-artifacts/rsdkv5u_mania.apk
-
-
-      # ============================================================
-      # BUILD RSDKv5
-      # ============================================================
+          find engine/android/app/build/outputs \
+            -type f -name '*.apk' \
+            -exec cp {} "$GITHUB_WORKSPACE/artifacts/v5u/" \; \
+            2>/dev/null || true
 
       - name: Build RSDKv5 Android
-        working-directory: ./android
+        working-directory: engine/android
         run: |
-          set -e
+          set -euo pipefail
 
-          echo "========================================"
-          echo "CLEANING"
-          echo "========================================"
-
-          ./gradlew \
-            clean \
-            --no-daemon
-
-          echo ""
-          echo "========================================"
-          echo "BUILDING RSDKv5 ANDROID"
-          echo "========================================"
-
-          echo "Java:"
-          java -version
-
-          echo ""
-          echo "Revision: 2"
-          echo "ABIs: armeabi-v7a + arm64-v8a"
+          ./gradlew clean --no-daemon
 
           ./gradlew assemble \
             --no-daemon \
             --stacktrace \
-            -PABIFILTERS="armeabi-v7a;arm64-v8a" \
+            -PABIFILTERS="arm64-v8a;armeabi-v7a" \
             -PRETRO_DISABLE_PLUS \
             -PRETRO_REVISION=2
 
-          echo ""
-          echo "========================================"
-          echo "RSDKv5 APK SEARCH"
-          echo "========================================"
-
-          find app/build/outputs \
-            -type f \
-            -name "*.apk" \
-            -print \
-            || true
-
-          APK=$(find \
-            app/build/outputs \
-            -type f \
-            -name "*.apk" \
-            | head -n 1)
-
-          if [ -z "$APK" ]; then
-            echo "ERROR: RSDKv5 APK was not produced."
-            exit 1
-          fi
-
-          echo "Found:"
-          echo "$APK"
-
-          cp \
-            "$APK" \
-            ../android-artifacts/rsdkv5_mania.apk
-
-
-      # ============================================================
-      # SHOW APKs
-      # ============================================================
-
-      - name: Show Android artifacts
+      - name: Save RSDKv5 APKs
         if: always()
         run: |
-          echo "========================================"
-          echo "ANDROID ARTIFACTS"
-          echo "========================================"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/v5"
 
-          if [ -d android-artifacts ]; then
-            ls -lh android-artifacts/
+          find engine/android/app/build/outputs \
+            -type f -name '*.apk' \
+            -exec cp {} "$GITHUB_WORKSPACE/artifacts/v5/" \; \
+            2>/dev/null || true
 
-            echo ""
-
-            find android-artifacts \
-              -type f \
-              -print
-          else
-            echo "No android-artifacts directory."
-          fi
-
-
-      # ============================================================
-      # UPLOAD APKs
-      # ============================================================
-
-      - name: Upload Android artifacts
+      - name: Upload Android APKs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v5-android
-          path: android-artifacts
+          name: origins-compatible-android-engine
+          path: artifacts/
           if-no-files-found: warn
-
-
-      # ============================================================
-      # CLEANUP
-      # ============================================================
-
-      - name: Cleanup
-        if: always()
-        run: |
-          rm -rf \
-            Sonic-Mania-Decompilation/dependencies/RSDKv5 \
-            || true
-
-          rm -rf \
-            android/app/jni/Game \
-            || true
-
-          rm -rf \
-            android/app/jni/MTC \
-            || true
-
-          rm -rf \
-            android/app/jni/UWM \
-            || true

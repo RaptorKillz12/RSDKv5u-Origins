@@ -1,4 +1,3 @@
-
 name: Build Origins-Compatible Android
 
 on:
@@ -12,9 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # --------------------------------------------------
-      # CHECKOUT ENGINE
-      # --------------------------------------------------
+      # CHECKOUT ORIGINS ENGINE
       - name: Checkout Origins-compatible RSDK engine
         uses: actions/checkout@v5
         with:
@@ -23,9 +20,7 @@ jobs:
           submodules: recursive
           path: engine
 
-      # --------------------------------------------------
       # CHECKOUT GAME SOURCE
-      # --------------------------------------------------
       - name: Checkout Sonic Mania source
         uses: actions/checkout@v5
         with:
@@ -33,9 +28,7 @@ jobs:
           submodules: recursive
           path: Sonic-Mania-Decompilation
 
-      # --------------------------------------------------
-      # JAVA 17
-      # --------------------------------------------------
+      # JAVA
       - name: Setup Java 17
         uses: actions/setup-java@v5
         with:
@@ -49,53 +42,74 @@ jobs:
           java -version
           javac -version
 
-      # --------------------------------------------------
-      # ANDROID SDK
-      # --------------------------------------------------
+      # ANDROID SDK SETUP
+      # Continue if the setup action fails; the next step installs tools.
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        continue-on-error: true
 
       - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Installing Android SDK packages..."
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/.android/sdk}}"
 
-          sdkmanager --install \
+          echo "Using Android SDK: $SDK"
+          mkdir -p "$SDK/cmdline-tools"
+
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+          sudo apt-get update
+          sudo apt-get install -y curl unzip
+
+          curl -fL \
+            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+            -o /tmp/android-commandline-tools.zip
+
+          mkdir -p /tmp/android-tools
+          unzip -q /tmp/android-commandline-tools.zip \
+            -d /tmp/android-tools
+
+          rm -rf "$SDK/cmdline-tools/latest"
+          mkdir -p "$SDK/cmdline-tools/latest"
+
+          mv /tmp/android-tools/cmdline-tools/* \
+            "$SDK/cmdline-tools/latest/"
+
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$SDK" --licenses || true
+
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$SDK" \
             "platform-tools" \
             "platforms;android-33" \
             "build-tools;33.0.2" \
             "ndk;24.0.8215888" \
             "cmake;3.22.1"
 
-          echo "Android SDK packages installed."
+          echo "Android SDK installation complete."
 
       - name: Verify Android SDK
         shell: bash
         run: |
           set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          "$ANDROID_SDK_ROOT/platform-tools/adb" version
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$ANDROID_SDK_ROOT" --list_installed
 
-          echo "ANDROID_HOME=${ANDROID_HOME:-not-set}"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not-set}"
-
-          adb version
-          sdkmanager --list_installed
-
-      # --------------------------------------------------
-      # LINUX TOOLS
-      # --------------------------------------------------
+      # LINUX DEPENDENCIES
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            curl \
-            unzip \
-            rsync
+          sudo apt-get install -y curl unzip rsync
 
-      # --------------------------------------------------
-      # OGG AND THEORA
-      # --------------------------------------------------
+      # OGG AND THEORA DEPENDENCIES
       - name: Install Android OGG and Theora dependencies
         working-directory: engine/dependencies/android
         shell: bash
@@ -114,17 +128,13 @@ jobs:
           unzip -q libtheora.zip
 
           rm -rf libogg libtheora
-
           mkdir -p libogg
           rsync -a libogg-1.3.5/ libogg/
-
           mv libtheora-1.1.1 libtheora
 
           rm -f libogg.zip libtheora.zip
 
-      # --------------------------------------------------
-      # NATIVE SOURCE LINKS
-      # --------------------------------------------------
+      # JNI SOURCE LINKS
       - name: Configure Android source links
         shell: bash
         run: |
@@ -132,41 +142,31 @@ jobs:
 
           JNI="$GITHUB_WORKSPACE/engine/android/app/jni"
 
-          test -f engine/android/app/jni/CMakeLists.txt
+          test -f "$JNI/CMakeLists.txt"
           test -f engine/android/app/build.gradle
           test -f engine/android/gradlew
 
-          mkdir -p "$JNI"
-
           rm -rf "$JNI/RSDKv5" "$JNI/Game"
 
-          ln -s \
-            "$GITHUB_WORKSPACE/engine" \
+          ln -s "$GITHUB_WORKSPACE/engine" \
             "$JNI/RSDKv5"
 
-          ln -s \
-            "$GITHUB_WORKSPACE/Sonic-Mania-Decompilation" \
+          ln -s "$GITHUB_WORKSPACE/Sonic-Mania-Decompilation" \
             "$JNI/Game"
 
           echo "Configured JNI source links:"
           ls -la "$JNI"
 
-      # --------------------------------------------------
-      # GRADLE CONFIGURATION
-      # --------------------------------------------------
+      # GRADLE
       - name: Prepare Gradle
         working-directory: engine/android
         shell: bash
         run: |
           set -euo pipefail
-
           chmod +x gradlew
-
           ./gradlew --no-daemon --version
 
-      # --------------------------------------------------
-      # BUILD RSDKv5U
-      # --------------------------------------------------
+      # BUILD REVISION 3
       - name: Build RSDKv5U Android
         working-directory: engine/android
         shell: bash
@@ -188,17 +188,14 @@ jobs:
 
           if [ -d engine/android/app/build/outputs ]; then
             find engine/android/app/build/outputs \
-              -type f \
-              -name '*.apk' \
+              -type f -name '*.apk' \
               -exec cp -t artifacts/v5u/ {} + \
               2>/dev/null || true
           fi
 
           ls -lh artifacts/v5u || true
 
-      # --------------------------------------------------
-      # BUILD RSDKv5
-      # --------------------------------------------------
+      # BUILD REVISION 2
       - name: Build RSDKv5 Android
         working-directory: engine/android
         shell: bash
@@ -222,17 +219,14 @@ jobs:
 
           if [ -d engine/android/app/build/outputs ]; then
             find engine/android/app/build/outputs \
-              -type f \
-              -name '*.apk' \
+              -type f -name '*.apk' \
               -exec cp -t artifacts/v5/ {} + \
               2>/dev/null || true
           fi
 
           ls -lh artifacts/v5 || true
 
-      # --------------------------------------------------
       # UPLOAD APK ARTIFACTS
-      # --------------------------------------------------
       - name: Upload Android APKs
         if: always()
         uses: actions/upload-artifact@v4
